@@ -1,47 +1,101 @@
-import React, { InputHTMLAttributes } from 'react';
+import React from 'react';
 
-interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
+export interface FormFieldProps {
   label: string;
-  error?: string;
+  name: string;
   type?: string;
-  as?: 'input' | 'textarea' | 'select';
+  value?: string | number;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  required?: boolean;
+  error?: string;
+  as?: 'input' | 'select' | 'textarea';
+  options?: Array<{ value: string; label: string }>;
+  rows?: number;
+  labelClassName?: string;
+  className?: string;
   children?: React.ReactNode;
+  readOnly?: boolean;
+  placeholder?: string;
 }
 
 const FormField: React.FC<FormFieldProps> = ({
   label,
-  error,
+  name,
   type = 'text',
+  value,
+  onChange,
+  required = false,
+  error,
   as = 'input',
+  options = [],
+  rows = 3,
+  labelClassName = '',
   className = '',
   children,
-  ...props
+  readOnly = false,
+  placeholder,
 }) => {
-  const baseClassName = "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50";
-  
+  const baseClassName = `block w-full rounded-md shadow-sm sm:text-sm ${
+    error
+      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+      : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500'
+  } ${className}`;
+
+  const renderField = () => {
+    const commonProps = {
+      id: name,
+      name,
+      value: value ?? '',
+      onChange,
+      required,
+      readOnly,
+      placeholder,
+      className: baseClassName,
+    };
+
+    switch (as) {
+      case 'textarea':
+        return (
+          <textarea
+            {...commonProps}
+            rows={rows}
+          />
+        );
+      case 'select':
+        return (
+          <select {...commonProps}>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+            {children}
+          </select>
+        );
+      default:
+        return (
+          <input
+            {...commonProps}
+            type={type}
+          />
+        );
+    }
+  };
+
   return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+    <div>
+      <label
+        htmlFor={name}
+        className={`block text-sm font-medium text-gray-700 ${labelClassName}`}
+      >
         {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
-      {as === 'textarea' ? (
-        <textarea
-          className={`${baseClassName} ${className}`}
-          {...(props as InputHTMLAttributes<HTMLTextAreaElement>)}
-        />
-      ) : as === 'select' ? (
-        <select className={`${baseClassName} ${className}`} {...props}>
-          {children}
-        </select>
-      ) : (
-        <input
-          type={type}
-          className={`${baseClassName} ${className}`}
-          {...props}
-        />
-      )}
+      <div className="mt-1">
+        {renderField()}
+      </div>
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-2 text-sm text-red-600">{error}</p>
       )}
     </div>
   );

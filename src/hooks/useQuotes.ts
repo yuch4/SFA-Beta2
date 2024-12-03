@@ -17,15 +17,11 @@ export const useQuotes = () => {
           id,
           quote_number,
           case_id,
-          cases (
-            id,
-            case_number,
+          cases!inner (
             case_name
           ),
           customer_id,
-          customers (
-            id,
-            customer_code,
+          customers!inner (
             customer_name
           ),
           quote_date,
@@ -33,7 +29,6 @@ export const useQuotes = () => {
           total_amount,
           profit_rate,
           status,
-          version,
           updated_at
         `)
         .eq('is_deleted', false)
@@ -45,15 +40,14 @@ export const useQuotes = () => {
         id: quote.id,
         quote_number: quote.quote_number,
         case_id: quote.case_id,
-        case_name: quote.cases?.case_name || '',
+        case_name: quote.cases.case_name,
         customer_id: quote.customer_id,
-        customer_name: quote.customers?.customer_name || '',
+        customer_name: quote.customers.customer_name,
         quote_date: quote.quote_date,
         valid_until: quote.valid_until,
         total_amount: quote.total_amount,
         profit_rate: quote.profit_rate,
         status: quote.status,
-        version: quote.version,
         updated_at: quote.updated_at,
       })) || [];
 

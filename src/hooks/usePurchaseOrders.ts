@@ -17,20 +17,15 @@ export const usePurchaseOrders = () => {
           id,
           po_number,
           case_id,
-          cases (
-            id,
-            case_number,
+          cases:case_id!inner (
             case_name
           ),
           quote_id,
-          quotes (
-            id,
+          quotes:quote_id (
             quote_number
           ),
           supplier_id,
-          suppliers (
-            id,
-            supplier_code,
+          suppliers:supplier_id!inner (
             supplier_name
           ),
           po_date,
@@ -75,9 +70,9 @@ export const usePurchaseOrders = () => {
         .from('purchase_orders')
         .select(`
           *,
-          cases (*),
-          quotes (*),
-          suppliers (*)
+          cases:case_id!inner (*),
+          quotes:quote_id (*),
+          suppliers:supplier_id!inner (*)
         `)
         .eq('id', id)
         .single();

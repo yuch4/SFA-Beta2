@@ -15,6 +15,8 @@ import ApprovalFlowMaster from './components/masters/approval-flows/ApprovalFlow
 import CaseList from './components/cases/CaseList';
 import QuoteList from './components/quotes/QuoteList';
 import PurchaseOrderList from './components/purchase-orders/PurchaseOrderList';
+import PurchaseOrderRevisionDialog from './components/purchase-orders/PurchaseOrderRevisionDialog';
+import ApprovalTaskPage from './components/approvals/ApprovalTaskPage';
 
 function App() {
   return (
@@ -36,10 +38,12 @@ function App() {
                       <Route path="/masters/suppliers" element={<SupplierMaster />} />
                       <Route path="/masters/project-codes" element={<ProjectCodeMaster />} />
                       <Route path="/masters/statuses" element={<StatusMaster />} />
-                      <Route path="/masters/approval-flows" element={<ApprovalFlowMaster />} />
+                      <Route path="/masters/approval-flows/*" element={<ApprovalFlowMaster />} />
                       <Route path="/cases" element={<CaseList />} />
                       <Route path="/quotes" element={<QuoteList />} />
                       <Route path="/purchase-orders" element={<PurchaseOrderList />} />
+                      <Route path="/purchase-orders/:id" element={<PurchaseOrderRevisionDialog />} />
+                      <Route path="/approvals" element={<ApprovalTaskPage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </main>

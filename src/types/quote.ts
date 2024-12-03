@@ -1,6 +1,16 @@
 export type QuoteStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
 export type QuoteItemType = 'NORMAL' | 'SUBTOTAL' | 'DISCOUNT';
 
+export interface BaseEntity {
+  id: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+  is_active: boolean;
+  is_deleted: boolean;
+}
+
 export interface Quote extends BaseEntity {
   quote_number: string;
   case_id: string;
@@ -20,9 +30,6 @@ export interface Quote extends BaseEntity {
   notes?: string;
   internal_memo?: string;
   status: QuoteStatus;
-  version: number;
-  revision_reason?: string;
-  revision_notes?: string;
 }
 
 export interface QuoteItem extends BaseEntity {
@@ -34,24 +41,14 @@ export interface QuoteItem extends BaseEntity {
   unit: string;
   unit_price: number;
   supplier_id?: string;
+  suppliers?: {
+    id: string;
+    supplier_code: string;
+    supplier_name: string;
+  };
   purchase_unit_price: number;
   amount: number;
   is_tax_applicable: boolean;
-}
-
-export interface QuoteHistory {
-  id: string;
-  quote_id: string;
-  version: number;
-  field_name: string;
-  previous_value: string | null;
-  new_value: string | null;
-  changed_at: string;
-  changed_by: string;
-  changed_by_name: string;
-  revision_reason?: string;
-  revision_notes?: string;
-  change_type: string;
 }
 
 export interface QuoteAttachment {
@@ -76,6 +73,5 @@ export interface QuoteListView {
   total_amount: number;
   profit_rate: number;
   status: QuoteStatus;
-  version: number;
   updated_at: string;
 }

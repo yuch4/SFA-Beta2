@@ -12,6 +12,7 @@ import {
   Tags,
   FileSpreadsheet,
   CheckSquare,
+  ClipboardCheck,
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -151,6 +152,17 @@ const Sidebar = () => {
           >
             <ShoppingCart size={20} />
             <span>発注管理</span>
+          </NavLink>
+          <NavLink
+            to="/approvals"
+            className={({ isActive }) =>
+              `flex items-center space-x-2 p-2 rounded-lg ${
+                isActive ? 'bg-blue-600' : 'hover:bg-gray-800'
+              } text-white`
+            }
+          >
+            <ClipboardCheck size={20} />
+            <span>承認タスク</span>
           </NavLink>
         </div>
       </nav>

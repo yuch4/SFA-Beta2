@@ -59,7 +59,7 @@ const SupplierSelectionDialog: React.FC<SupplierSelectionDialogProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6">
+          <div className="p-6">
             <div className="mb-4">
               <div className="flex justify-between items-center mb-2">
                 <h4 className="text-sm font-medium text-gray-700">仕入先選択</h4>
@@ -142,14 +142,15 @@ const SupplierSelectionDialog: React.FC<SupplierSelectionDialogProps> = ({
                 キャンセル
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={handleSubmit}
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={selectedSuppliers.length === 0}
               >
                 発注書作成
               </button>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

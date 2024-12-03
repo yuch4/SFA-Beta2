@@ -106,7 +106,7 @@ const QuoteBasicInfo: React.FC<QuoteBasicInfoProps> = ({
           label="消費税"
           type="text"
           name="tax_amount"
-          value={formData.tax_amount.toLocaleString()}
+          value={formData.tax_amount?.toLocaleString() || '0'}
           readOnly
           className="bg-gray-50 font-medium"
         />
@@ -115,7 +115,7 @@ const QuoteBasicInfo: React.FC<QuoteBasicInfoProps> = ({
           label="見積金額"
           type="text"
           name="total_amount"
-          value={formData.total_amount.toLocaleString()}
+          value={formData.total_amount?.toLocaleString() || '0'}
           readOnly
           className="bg-gray-50 font-medium"
         />
@@ -124,7 +124,7 @@ const QuoteBasicInfo: React.FC<QuoteBasicInfoProps> = ({
           label="粗利率"
           type="text"
           name="profit_rate"
-          value={`${formData.profit_rate.toFixed(1)}%`}
+          value={`${(formData.profit_rate || 0).toFixed(1)}%`}
           readOnly
           className="bg-gray-50 font-medium"
         />

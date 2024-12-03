@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { Case } from '../../types/case';
-import { Customer, Supplier } from '../../types/master';
-import { Quote, QuoteItem, QuoteHistory, QuoteAttachment } from '../../types/quote';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
-import { generateQuoteNumber, calculateTotals } from '../../utils/quoteUtils';
-import { initializeQuoteForm } from '../../utils/formUtils';
+import { supabase } from '../../lib/supabase';
+import { Quote, QuoteItem } from '../../types/quote';
+import { Case } from '../../types/case';
+import { Customer, Supplier, SupplierType } from '../../types/master';
+import { generateQuoteNumber } from '../../utils/quoteUtils';
+import { generatePurchaseOrderNumber } from '../../utils/purchaseOrderUtils';
 import QuoteBasicInfo from './QuoteBasicInfo';
 import QuoteItemList from './QuoteItemList';
-import QuoteRevisionDialog from './QuoteRevisionDialog';
-import QuoteRevisionHistory from './QuoteRevisionHistory';
 import QuoteAttachments from './QuoteAttachments';
 import QuoteActions from './QuoteActions';
 import SupplierSelectionDialog from './SupplierSelectionDialog';
@@ -23,23 +21,137 @@ interface QuoteFormProps {
   isCopy?: boolean;
 }
 
+// 承認ステップの進捗を表示するコンポーネント
+const ApprovalProgress: React.FC<{ quoteId: string }> = ({ quoteId }) => {
+  const [approvalSteps, setApprovalSteps] = useState<any[]>([]);
+  const [currentStep, setCurrentStep] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchApprovalProgress = async () => {
+      try {
+        // 承認申請情報を取得（最新のもののみ）
+        const { data: requestData, error: requestError } = await supabase
+          .from('approval_requests')
+          .select('id, status')
+          .eq('request_type', 'QUOTE')
+          .eq('request_id', quoteId)
+          .eq('is_deleted', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (requestError) {
+          if (requestError.code === 'PGRST116') {
+            // データが見つからない場合は正常として扱う
+            return;
+          }
+          throw requestError;
+        }
+
+        if (requestData) {
+          // 承認ステップ情報を取得
+          const { data: stepsData, error: stepsError } = await supabase
+            .from('approval_request_steps')
+            .select(`
+              *,
+              user_profiles:approver_id(
+                id,
+                email,
+                display_name
+              )
+            `)
+            .eq('approval_request_id', requestData.id)
+            .eq('is_deleted', false)
+            .order('step_order');
+
+          if (stepsError) throw stepsError;
+
+          setApprovalSteps(stepsData || []);
+          setCurrentStep(stepsData?.findIndex(step => step.status === 'PENDING') || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching approval progress:', error);
+      }
+    };
+
+    if (quoteId) {
+      fetchApprovalProgress();
+    }
+  }, [quoteId]);
+
+  if (approvalSteps.length === 0) return null;
+
+  return (
+    <div className="mt-4 p-4 bg-white rounded-lg shadow">
+      <h3 className="text-lg font-medium mb-4">承認ステップ進捗</h3>
+      <div className="flex items-center">
+        {approvalSteps.map((step, index) => (
+          <React.Fragment key={step.id}>
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  step.status === 'APPROVED'
+                    ? 'bg-green-500 text-white'
+                    : step.status === 'REJECTED'
+                    ? 'bg-red-500 text-white'
+                    : index === currentStep
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-600'
+                }`}
+              >
+                {index + 1}
+              </div>
+              <div className="text-sm mt-1">
+                {step.status === 'APPROVED' ? '承認済' :
+                 step.status === 'REJECTED' ? '却下' :
+                 index === currentStep ? '承認待ち' : '未到達'}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {step.user_profiles?.display_name || step.user_profiles?.email || '未設定'}
+              </div>
+            </div>
+            {index < approvalSteps.length - 1 && (
+              <div className="flex-1 h-0.5 bg-gray-200 mx-2" />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy = false }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [formData, setFormData] = useState<Partial<Quote>>({
+    quote_number: '',
+    quote_date: new Date().toISOString().split('T')[0],
+    valid_until: '',
+    delivery_date: '',
+    payment_terms: '',
+    subject: '',
+    message: '',
+    notes: '',
+    internal_memo: '',
+    subtotal: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    purchase_cost: 0,
+    profit_amount: 0,
+    profit_rate: 0,
+    status: 'DRAFT',
+  });
+  const [items, setItems] = useState<QuoteItem[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<string>('');
+  const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
   const [cases, setCases] = useState<Case[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedCase, setSelectedCase] = useState<Case | undefined>();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
-  const [items, setItems] = useState<QuoteItem[]>([]);
-  const [attachments, setAttachments] = useState<QuoteAttachment[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false);
-  const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
-  const [quoteHistory, setQuoteHistory] = useState<QuoteHistory[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [formData, setFormData] = useState<Partial<Quote>>(initializeQuoteForm(quote));
-  const [supplierGroups, setSupplierGroups] = useState<Record<string, { supplier: Supplier; items: QuoteItem[] }>>({});
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -49,274 +161,339 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
           { data: customersData },
           { data: suppliersData }
         ] = await Promise.all([
-          supabase.from('cases').select('*').eq('is_active', true),
-          supabase.from('customers').select('*').eq('is_active', true),
-          supabase.from('suppliers').select('*').eq('is_active', true)
+          supabase.from('cases').select('*').eq('is_deleted', false),
+          supabase.from('customers').select('*').eq('is_deleted', false),
+          supabase.from('suppliers').select('*').eq('is_deleted', false)
         ]);
 
-        setCases(casesData || []);
-        setCustomers(customersData || []);
-        setSuppliers(suppliersData || []);
+        console.log('Fetched suppliers:', suppliersData);
 
-        if (quote) {
-          const selectedCase = casesData?.find(c => c.id === quote.case_id);
-          const selectedCustomer = customersData?.find(c => c.id === quote.customer_id);
-          setSelectedCase(selectedCase);
-          setSelectedCustomer(selectedCustomer);
+        if (casesData) setCases(casesData);
+        if (customersData) setCustomers(customersData);
+        if (suppliersData) setSuppliers(suppliersData);
+      } catch (error) {
+        console.error('Error fetching master data:', error);
+        toast.error('マスターデータの取得に失敗しました');
+      }
+    };
 
-          // Fetch quote items
-          const { data: itemsData } = await supabase
+    fetchMasterData();
+  }, []);
+
+  useEffect(() => {
+    const initializeForm = async () => {
+      if (quote) {
+        try {
+          // Fetch quote items with supplier information
+          const { data: itemsData, error: itemsError } = await supabase
             .from('quote_items')
-            .select('*')
+            .select(`
+              *,
+              suppliers (
+                id,
+                supplier_code,
+                supplier_name,
+                supplier_name_kana,
+                supplier_type,
+                address,
+                phone,
+                email,
+                contact_person,
+                contact_phone,
+                department,
+                payment_terms,
+                purchase_terms,
+                notes,
+                created_at,
+                updated_at,
+                created_by,
+                updated_by,
+                is_active,
+                is_deleted
+              )
+            `)
             .eq('quote_id', quote.id)
             .eq('is_deleted', false)
             .order('item_order');
 
-          if (itemsData) {
-            setItems(itemsData);
-          }
-
-          // Fetch quote history
-          const { data: historyData } = await supabase
-            .from('quote_histories')
-            .select('*')
-            .eq('quote_id', quote.id)
-            .order('changed_at', { ascending: false });
-
-          if (historyData) {
-            setQuoteHistory(historyData);
-          }
+          if (itemsError) throw itemsError;
 
           // Fetch attachments
-          const { data: attachmentsData } = await supabase
+          const { data: attachmentsData, error: attachmentsError } = await supabase
             .from('quote_attachments')
             .select('*')
             .eq('quote_id', quote.id)
             .eq('is_deleted', false);
 
-          if (attachmentsData) {
-            setAttachments(attachmentsData);
+          if (attachmentsError) throw attachmentsError;
+
+          // Set form data
+          if (isCopy) {
+            setFormData({
+              ...formData,
+              quote_number: generateQuoteNumber(),
+              case_id: quote.case_id,
+              customer_id: quote.customer_id,
+              quote_date: new Date().toISOString().split('T')[0],
+              status: 'DRAFT',
+            });
+          } else {
+            setFormData(quote);
           }
+
+          // Set items and attachments
+          if (itemsData) setItems(itemsData);
+          if (attachmentsData) setAttachments(attachmentsData);
+
+          // Set selected case and customer
+          const selectedCase = cases.find(c => c.id === quote.case_id);
+          const selectedCustomer = customers.find(c => c.id === quote.customer_id);
+          setSelectedCase(selectedCase);
+          setSelectedCustomer(selectedCustomer);
+        } catch (error) {
+          console.error('Error fetching quote details:', error);
+          toast.error('見積データの取得に失敗しました');
         }
-      } catch (error) {
-        console.error('Error fetching master data:', error);
-        toast.error('データの取得に失敗しました');
+      } else {
+        setFormData({
+          ...formData,
+          quote_number: generateQuoteNumber(),
+        });
       }
     };
 
-    fetchMasterData();
-  }, [quote]);
+    initializeForm();
+  }, [quote, isCopy, cases, customers]);
 
-  const handleCreatePurchaseOrders = async () => {
-    // Group items by supplier
-    const itemsBySupplier = items.reduce((acc: Record<string, { supplier: Supplier; items: QuoteItem[] }>, item) => {
-      if (!item.supplier_id) return acc;
-      const supplier = suppliers.find(s => s.id === item.supplier_id);
-      if (!supplier) return acc;
-      
-      if (!acc[item.supplier_id]) {
-        acc[item.supplier_id] = {
-          supplier,
-          items: [],
-        };
-      }
-      acc[item.supplier_id].items.push(item);
-      return acc;
-    }, {});
+  const handleFieldChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-    if (Object.keys(itemsBySupplier).length === 0) {
-      toast.error('仕入先が設定されている明細がありません');
+  const handleCreatePurchaseOrders = useCallback(async (supplierIdToUse?: string) => {
+    if (!supplierIdToUse) {
       return;
     }
 
-    setSupplierGroups(itemsBySupplier);
-    setIsSupplierDialogOpen(true);
-  };
-
-  const handleSupplierSelection = async (selectedSuppliers: string[]) => {
     try {
+      console.log('Debug: Starting purchase order creation');
       setIsSubmitting(true);
-      
-      for (const supplierId of selectedSuppliers) {
-        const supplierGroup = supplierGroups[supplierId];
-        if (!supplierGroup) continue;
+      const poNumber = generatePurchaseOrderNumber();
 
-        const poNumber = generateQuoteNumber('PO');
-        const poItems = supplierGroup.items.map((item, index) => ({
-          id: crypto.randomUUID(),
-          item_order: index + 1,
-          item_name: item.item_name,
-          quantity: item.quantity,
-          unit: item.unit,
-          unit_price: item.purchase_unit_price,
-          amount: item.quantity * item.purchase_unit_price,
-          quote_item_id: item.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          created_by: user?.id,
-          updated_by: user?.id,
-          is_active: true,
-          is_deleted: false,
-        }));
+      // Filter items for the selected supplier
+      const supplierItems = items.filter(item => {
+        return item.supplier_id === supplierIdToUse && item.item_type === 'NORMAL';
+      });
 
-        const totals = poItems.reduce(
-          (acc, item) => ({
-            subtotal: acc.subtotal + item.amount,
-            tax_amount: acc.tax_amount + item.amount * 0.1,
-            total_amount: acc.total_amount + item.amount * 1.1,
-          }),
-          { subtotal: 0, tax_amount: 0, total_amount: 0 }
-        );
-
-        const poPayload = {
-          po_number: poNumber,
-          case_id: formData.case_id,
-          quote_id: quote?.id,
-          supplier_id: supplierId,
-          po_date: new Date().toISOString().split('T')[0],
-          delivery_date: formData.delivery_date,
-          payment_terms: formData.payment_terms,
-          ...totals,
-          status: 'DRAFT',
-          version: 1,
-          created_by: user?.id,
-          updated_by: user?.id,
-          is_active: true,
-          is_deleted: false,
-        };
-
-        const { data: poData, error: poError } = await supabase
-          .from('purchase_orders')
-          .insert([poPayload])
-          .select()
-          .single();
-
-        if (poError) throw poError;
-
-        const itemsToInsert = poItems.map(item => ({
-          ...item,
-          po_id: poData.id,
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('purchase_order_items')
-          .insert(itemsToInsert);
-
-        if (itemsError) throw itemsError;
+      if (supplierItems.length === 0) {
+        toast.error('選択された仕入先の商品がありません');
+        setIsSubmitting(false);
+        setIsSupplierDialogOpen(false);
+        return;
       }
 
-      toast.success('発注書を作成しました');
-      setIsSupplierDialogOpen(false);
-      navigate('/purchase-orders');
-    } catch (error) {
-      console.error('Error creating purchase orders:', error);
-      toast.error('発注書の作成に失敗しました');
-    } finally {
+      // Calculate totals
+      const subtotal = supplierItems.reduce(
+        (sum, item) => sum + (item.quantity || 0) * (item.purchase_unit_price || 0),
+        0
+      );
+      const taxAmount = subtotal * 0.1;
+      const totalAmount = subtotal + taxAmount;
+
+      // Create purchase order
+      const { data: poData, error: poError } = await supabase
+        .from('purchase_orders')
+        .insert([
+          {
+            po_number: poNumber,
+            case_id: formData.case_id,
+            quote_id: quote?.id,
+            supplier_id: supplierIdToUse,
+            po_date: new Date().toISOString().split('T')[0],
+            delivery_date: formData.delivery_date,
+            subtotal,
+            tax_amount: taxAmount,
+            total_amount: totalAmount,
+            status: 'DRAFT',
+            created_by: user?.id,
+            updated_by: user?.id,
+          },
+        ])
+        .select()
+        .single();
+
+      if (poError) throw poError;
+
+      // Create purchase order items
+      const poItems = supplierItems.map((item, index) => ({
+        po_id: poData.id,
+        item_order: index + 1,
+        item_name: item.item_name,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.purchase_unit_price,
+        amount: (item.quantity || 0) * (item.purchase_unit_price || 0),
+        quote_item_id: item.id,
+        created_by: user?.id,
+        updated_by: user?.id,
+      }));
+
+      const { error: poItemsError } = await supabase
+        .from('purchase_order_items')
+        .insert(poItems);
+
+      if (poItemsError) throw poItemsError;
+
+      // 発注書作成成功後の処理
+      const poId = poData.id;
+      console.log('Debug: Purchase order created with ID:', poId);
+      console.log('Debug: Current location before navigation:', window.location.pathname);
+      
+      // 状態をクリア
       setIsSubmitting(false);
+      setIsSupplierDialogOpen(false);
+      setSelectedSupplier('');
+      
+      // トースト表示
+      toast.success('発注書を作成しました');
+
+      // フォームのクリーンアップ
+      onSubmit();
+      
+      // 最後にナゲーションを実行
+      console.log('Debug: Attempting navigation to:', `/purchase-orders/${poId}`);
+      navigate(`/purchase-orders/${poId}`, { replace: true });
+      console.log('Debug: Navigation called');
+
+    } catch (error) {
+      console.error('Error creating purchase order:', error);
+      toast.error('発注書の作成に失敗しました');
+      setIsSubmitting(false);
+      setIsSupplierDialogOpen(false);
+      setSelectedSupplier('');
     }
-  };
+  }, [navigate, items, formData, quote, user]);
+
+  // 現在のロケーション変更を監視
+  useEffect(() => {
+    console.log('Debug: Current location changed:', window.location.pathname);
+  }, [window.location.pathname]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
 
-    if (quote && !isCopy) {
-      setIsRevisionDialogOpen(true);
-      return;
-    }
-
-    await handleSubmit();
-  };
-
-  const handleRevisionSubmit = async (reason: string, notes: string) => {
     try {
       setIsSubmitting(true);
-      const now = new Date().toISOString();
-      const newVersion = (quote?.version || 1) + 1;
 
-      // Update quote with new version and revision info
-      const { error: quoteError } = await supabase
-        .from('quotes')
-        .update({
-          ...formData,
-          version: newVersion,
-          revision_reason: reason,
-          revision_notes: notes,
-          updated_at: now,
-          updated_by: user?.id,
-        })
-        .eq('id', quote?.id);
-
-      if (quoteError) throw quoteError;
-
-      // Delete existing items
-      const { error: deleteError } = await supabase
-        .from('quote_items')
-        .update({ is_deleted: true })
-        .eq('quote_id', quote?.id);
-
-      if (deleteError) throw deleteError;
-
-      // Insert new items
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        quote_id: quote?.id,
-        created_by: user?.id,
-        updated_by: user?.id,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('quote_items')
-        .insert(itemsToInsert);
-
-      if (itemsError) throw itemsError;
-
-      toast.success('見積書を更新しました');
-      setIsRevisionDialogOpen(false);
-      onSubmit();
-    } catch (error) {
-      console.error('Error updating quote:', error);
-      toast.error('見積書の更新に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmit = async () => {
-    try {
-      setIsSubmitting(true);
-      const now = new Date().toISOString();
-      const quoteNumber = generateQuoteNumber();
-
-      const quotePayload = {
-        ...formData,
-        quote_number: quoteNumber,
-        created_by: user?.id,
+      // 保存用のデータを準備
+      const quoteData = {
+        quote_number: formData.quote_number,
+        case_id: formData.case_id,
+        quote_date: formData.quote_date,
+        valid_until: formData.valid_until,
+        customer_id: formData.customer_id,
+        payment_terms: formData.payment_terms,
+        delivery_date: formData.delivery_date,
+        subtotal: formData.subtotal,
+        tax_amount: formData.tax_amount,
+        total_amount: formData.total_amount,
+        purchase_cost: formData.purchase_cost,
+        profit_amount: formData.profit_amount,
+        profit_rate: formData.profit_rate,
+        subject: formData.subject,
+        message: formData.message,
+        notes: formData.notes,
+        internal_memo: formData.internal_memo,
+        status: formData.status,
         updated_by: user?.id,
       };
 
-      const { data: quoteData, error: quoteError } = await supabase
-        .from('quotes')
-        .insert([quotePayload])
-        .select()
-        .single();
+      if (quote) {
+        // 更新の場合
+        const { error: updateError } = await supabase
+          .from('quotes')
+          .update(quoteData)
+          .eq('id', quote.id);
 
-      if (quoteError) throw quoteError;
+        if (updateError) throw updateError;
 
-      const itemsToInsert = items.map(item => ({
-        ...item,
-        quote_id: quoteData.id,
-        created_by: user?.id,
-        updated_by: user?.id,
-      }));
+        // 既存の明細を物理削除
+        const { error: deleteError } = await supabase
+          .from('quote_items')
+          .delete()
+          .eq('quote_id', quote.id);
 
-      const { error: itemsError } = await supabase
-        .from('quote_items')
-        .insert(itemsToInsert);
+        if (deleteError) throw deleteError;
 
-      if (itemsError) throw itemsError;
+        // 新しい明細を挿入
+        const itemsToUpdate = items.map((item, index) => ({
+          id: crypto.randomUUID(), // 新しいIDを生成
+          quote_id: quote.id,
+          item_order: index + 1,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          supplier_id: item.supplier_id,
+          purchase_unit_price: item.purchase_unit_price,
+          amount: item.amount,
+          is_tax_applicable: item.is_tax_applicable,
+          created_by: user?.id,
+          updated_by: user?.id,
+          is_active: true,
+          is_deleted: false,
+        }));
 
-      toast.success('見積書を作成しました');
+        const { error: insertError } = await supabase
+          .from('quote_items')
+          .insert(itemsToUpdate);
+
+        if (insertError) throw insertError;
+      } else {
+        // 新規作成の場合
+        const { data: newQuote, error: insertError } = await supabase
+          .from('quotes')
+          .insert([{
+            ...quoteData,
+            created_by: user?.id,
+          }])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        // 明細の作成
+        const itemsToCreate = items.map((item, index) => ({
+          id: crypto.randomUUID(),
+          quote_id: newQuote.id,
+          item_order: index + 1,
+          item_type: item.item_type,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit: item.unit,
+          unit_price: item.unit_price,
+          supplier_id: item.supplier_id,
+          purchase_unit_price: item.purchase_unit_price,
+          amount: item.amount,
+          is_tax_applicable: item.is_tax_applicable,
+          created_by: user?.id,
+          updated_by: user?.id,
+          is_active: true,
+          is_deleted: false,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('quote_items')
+          .insert(itemsToCreate);
+
+        if (itemsError) throw itemsError;
+      }
+
+      toast.success('見積書を保存しました');
       onSubmit();
     } catch (error) {
       console.error('Error saving quote:', error);
@@ -326,9 +503,40 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
     }
   };
 
+  // 仕入先ごとに明細をグループ化する関数
+  const groupItemsBySupplier = () => {
+    const groupedItems: Record<string, { supplier: Supplier; items: QuoteItem[] }> = {};
+    
+    items.forEach(item => {
+      if (item.supplier_id && item.item_type === 'NORMAL') {
+        const supplierInfo = suppliers.find(s => s.id === item.supplier_id);
+        if (supplierInfo) {
+          if (!groupedItems[item.supplier_id]) {
+            groupedItems[item.supplier_id] = {
+              supplier: supplierInfo,
+              items: []
+            };
+          }
+          groupedItems[item.supplier_id].items.push(item);
+        }
+      }
+    });
+    
+    console.log('Grouped items:', groupedItems);
+    return groupedItems;
+  };
+
+  // コンポーネントのアンマウント時のデバッグ
+  useEffect(() => {
+    return () => {
+      console.log('Debug: QuoteForm unmounting with location:', window.location.pathname);
+      console.log('Debug: Navigation state at unmount:', window.history.state);
+    };
+  }, []);
+
   return (
-    <div className="space-y-6">
-      <form onSubmit={handleFormSubmit} className="space-y-6">
+    <>
+      <form onSubmit={handleFormSubmit} className="space-y-8">
         <QuoteBasicInfo
           formData={formData}
           selectedCase={selectedCase}
@@ -336,7 +544,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
           cases={cases}
           customers={customers}
           errors={errors}
-          onFieldChange={(e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))}
+          onFieldChange={handleFieldChange}
           onCaseSelect={(caseItem) => {
             setSelectedCase(caseItem);
             setFormData(prev => ({ ...prev, case_id: caseItem.id }));
@@ -350,11 +558,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
         <QuoteItemList
           items={items}
           suppliers={suppliers}
-          onItemsChange={(newItems) => {
-            setItems(newItems);
-            const totals = calculateTotals(newItems);
-            setFormData(prev => ({ ...prev, ...totals }));
-          }}
+          onItemsChange={setItems}
         />
 
         <QuoteAttachments
@@ -363,55 +567,56 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
           onAttachmentsChange={setAttachments}
         />
 
-        {quote && !isCopy && quoteHistory.length > 0 && (
-          <QuoteRevisionHistory history={quoteHistory} />
-        )}
-
-        <div className="flex justify-between pt-6 border-t">
-          <QuoteActions
-            onCopy={() => {}}
-            onExport={() => {}}
-            onImport={() => {}}
-            onCreatePurchaseOrders={handleCreatePurchaseOrders}
-            onSubmit={() => {}}
-            canSubmit={false}
-            hasPurchaseItems={items.some(item => item.supplier_id && item.purchase_unit_price > 0)}
-          />
-
-          <div className="flex space-x-4">
+        <div className="flex justify-between pt-5">
+          <div className="flex justify-start">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               キャンセル
             </button>
+          </div>
+          <div className="flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isSubmitting}
+              className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? '保存中...' : quote && !isCopy ? '更新' : '作成'}
+              {isSubmitting ? '保存中...' : '保存'}
             </button>
           </div>
         </div>
       </form>
 
-      <QuoteRevisionDialog
-        isOpen={isRevisionDialogOpen}
-        onClose={() => setIsRevisionDialogOpen(false)}
-        onSubmit={handleRevisionSubmit}
-        isSubmitting={isSubmitting}
-      />
+      {quote?.id && <ApprovalProgress quoteId={quote.id} />}
+
+      <div className="mt-4">
+        <QuoteActions
+          quoteId={quote?.id || ''}
+          onCopy={() => {}}
+          onExport={() => {}}
+          onImport={() => {}}
+          onCreatePurchaseOrders={() => {
+            setIsSupplierDialogOpen(true);
+          }}
+          canSubmit={true}
+          hasPurchaseItems={items.some(item => item.supplier_id && item.purchase_unit_price > 0)}
+          status={formData.status || 'DRAFT'}
+        />
+      </div>
 
       <SupplierSelectionDialog
         isOpen={isSupplierDialogOpen}
         onClose={() => setIsSupplierDialogOpen(false)}
-        onSubmit={handleSupplierSelection}
-        suppliers={supplierGroups}
+        onSubmit={(selectedSuppliers: string[]) => {
+          if (selectedSuppliers.length > 0) {
+            handleCreatePurchaseOrders(selectedSuppliers[0]);
+          }
+        }}
+        suppliers={groupItemsBySupplier()}
       />
-    </div>
+    </>
   );
 };
 
