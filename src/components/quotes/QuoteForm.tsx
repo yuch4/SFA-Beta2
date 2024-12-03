@@ -13,6 +13,8 @@ import QuoteItemList from './QuoteItemList';
 import QuoteAttachments from './QuoteAttachments';
 import QuoteActions from './QuoteActions';
 import SupplierSelectionDialog from './SupplierSelectionDialog';
+import { Send } from 'lucide-react';
+import ApprovalFlowSelectDialog from './ApprovalFlowSelectDialog';
 
 interface QuoteFormProps {
   quote?: Quote;
@@ -152,6 +154,7 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedCase, setSelectedCase] = useState<Case | undefined>();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -534,9 +537,55 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
     };
   }, []);
 
+  // 承認フロー選択時のハンドラー
+  const handleApprovalFlowSelect = async (flowId: string) => {
+    try {
+      if (!quote?.id) return;
+
+      // 承認申請を作成
+      const { error: requestError } = await supabase
+        .from('approval_requests')
+        .insert({
+          approval_flow_id: flowId,
+          request_type: 'QUOTE',
+          request_id: quote.id,
+          status: 'PENDING',
+          requested_by: user?.id,
+          created_by: user?.id,
+          updated_by: user?.id,
+        });
+
+      if (requestError) throw requestError;
+
+      // 見積のステータスを「承認中」に更新
+      const { error: updateError } = await supabase
+        .from('quotes')
+        .update({
+          status: 'PENDING',
+          updated_by: user?.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', quote.id);
+
+      if (updateError) throw updateError;
+
+      // ダイアログを閉じる
+      setIsApprovalDialogOpen(false);
+      
+      // 成功メッセージを表示
+      toast.success('承認申請を作成しました');
+
+      // 画面を更新
+      window.location.reload();
+    } catch (error) {
+      console.error('Error submitting approval request:', error);
+      toast.error('承認申請の作成に失敗しました');
+    }
+  };
+
   return (
     <>
-      <form onSubmit={handleFormSubmit} className="space-y-8">
+      <form onSubmit={handleFormSubmit} className="space-y-6">
         <QuoteBasicInfo
           formData={formData}
           selectedCase={selectedCase}
@@ -567,26 +616,31 @@ const QuoteForm: React.FC<QuoteFormProps> = ({ quote, onSubmit, onCancel, isCopy
           onAttachmentsChange={setAttachments}
         />
 
-        <div className="flex justify-between pt-5">
-          <div className="flex justify-start">
+        <div className="flex justify-end space-x-4">
+          {quote && quote.status === 'DRAFT' && (
             <button
               type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              onClick={() => setIsApprovalDialogOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              キャンセル
+              <Send className="h-4 w-4 mr-2" />
+              承認申請
             </button>
-          </div>
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? '保存中...' : '保存'}
-            </button>
-          </div>
+          )}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            保存
+          </button>
         </div>
+
+        <ApprovalFlowSelectDialog
+          isOpen={isApprovalDialogOpen}
+          onClose={() => setIsApprovalDialogOpen(false)}
+          onSelect={handleApprovalFlowSelect}
+        />
       </form>
 
       {quote?.id && <ApprovalProgress quoteId={quote.id} />}

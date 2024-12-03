@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, FileDown, FileUp, Send, ShoppingCart } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { useApprovalRequests } from '../../hooks/useApprovalRequests';
 import ApprovalFlowSelectDialog from './ApprovalFlowSelectDialog';
 import { toast } from 'react-hot-toast';
@@ -7,10 +7,6 @@ import { supabase } from '../../lib/supabase';
 
 interface QuoteActionsProps {
   quoteId: string;
-  onCopy: () => void;
-  onExport: () => void;
-  onImport: () => void;
-  onCreatePurchaseOrders: () => void;
   canSubmit: boolean;
   hasPurchaseItems: boolean;
   status: string;
@@ -18,10 +14,6 @@ interface QuoteActionsProps {
 
 const QuoteActions: React.FC<QuoteActionsProps> = ({
   quoteId,
-  onCopy,
-  onExport,
-  onImport,
-  onCreatePurchaseOrders,
   canSubmit,
   hasPurchaseItems,
   status,
@@ -66,40 +58,6 @@ const QuoteActions: React.FC<QuoteActionsProps> = ({
   return (
     <>
       <div className="flex space-x-4">
-        <button
-          type="button"
-          onClick={onCopy}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          <Copy className="h-4 w-4 mr-2" />
-          コピーして新規作成
-        </button>
-        <button
-          type="button"
-          onClick={onExport}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          <FileDown className="h-4 w-4 mr-2" />
-          エクスポート
-        </button>
-        <button
-          type="button"
-          onClick={onImport}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-        >
-          <FileUp className="h-4 w-4 mr-2" />
-          インポート
-        </button>
-        {hasPurchaseItems && (
-          <button
-            type="button"
-            onClick={onCreatePurchaseOrders}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            発注書作成
-          </button>
-        )}
         <button
           type="button"
           onClick={handleSubmit}

@@ -16,15 +16,25 @@ export interface Case extends BaseEntity {
   notes?: string;
 }
 
-export interface CaseHistory {
-  id: string;
+export type ActivityType = 'meeting' | 'call' | 'email' | 'visit' | 'other';
+
+export interface CaseActivity extends BaseEntity {
   case_id: string;
-  field_name: string;
-  old_value: string | null;
-  new_value: string | null;
-  changed_at: string;
-  changed_by: string | null;
-  change_type: string;
+  activity_type: ActivityType;
+  activity_date: string;
+  title: string;
+  description?: string;
+  next_action?: string;
+  next_action_date?: string;
+}
+
+export interface CaseActivityFormData {
+  activity_type: ActivityType;
+  activity_date: string;
+  title: string;
+  description?: string;
+  next_action?: string;
+  next_action_date?: string;
 }
 
 export interface CaseFile {
