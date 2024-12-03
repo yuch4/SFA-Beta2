@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
+import { toast } from 'react-hot-toast';
 
 export interface ApprovalTask {
   id: string;
@@ -156,12 +157,94 @@ export const useApprovalTasks = () => {
     }
   };
 
+  const checkApprovalCompletion = async (requestId: string) => {
+    try {
+      // 承認ステップの総数を取得
+      const { data: stepsData, error: stepsError } = await supabase
+        .from('approval_request_steps')
+        .select('status')
+        .eq('approval_request_id', requestId)
+        .eq('is_deleted', false);
+
+      if (stepsError) throw stepsError;
+
+      // すべてのステップが承認済みかチェック
+      const isCompleted = stepsData?.every(step => step.status === 'APPROVED');
+
+      if (isCompleted) {
+        // 承認リクエストの情報を取得
+        const { data: requestData, error: requestError } = await supabase
+          .from('approval_requests')
+          .select(`
+            id,
+            request_type,
+            request_id,
+            requested_by,
+            user_profiles!requested_by (
+              display_name,
+              email
+            )
+          `)
+          .eq('id', requestId)
+          .single();
+
+        if (requestError) throw requestError;
+
+        // 承認リクエストのステータスを更新
+        const { error: updateRequestError } = await supabase
+          .from('approval_requests')
+          .update({
+            status: 'APPROVED',
+            completed_at: new Date().toISOString(),
+            updated_by: user?.id
+          })
+          .eq('id', requestId);
+
+        if (updateRequestError) throw updateRequestError;
+
+        // リクエストタイプに応じてターゲットのステータスを更新
+        if (requestData.request_type === 'QUOTE') {
+          const { error: updateQuoteError } = await supabase
+            .from('quotes')
+            .update({
+              status: 'APPROVED',
+              updated_by: user?.id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', requestData.request_id);
+
+          if (updateQuoteError) throw updateQuoteError;
+
+          // 申請者に通知
+          const { error: notificationError } = await supabase
+            .from('notifications')
+            .insert({
+              user_id: requestData.requested_by,
+              type: 'APPROVAL_COMPLETED',
+              title: '承認完了通知',
+              message: '見積の承認が完了しました',
+              link: `/quotes/${requestData.request_id}`,
+              created_by: user?.id
+            });
+
+          if (notificationError) throw notificationError;
+
+          toast.success('承認フローが完了し、見積のステータスが更新されました');
+        }
+        // 必要に応じて他のリクエストタイプ（PURCHASE_ORDER等）の処理を追加
+      }
+    } catch (err) {
+      console.error('Error checking approval completion:', err);
+      throw err;
+    }
+  };
+
   const approveTask = async (taskId: string, comments?: string) => {
     if (!user) return;
 
     try {
       // ステップを承認済みに更新
-      const { error: updateError } = await supabase
+      const { data: stepData, error: updateError } = await supabase
         .from('approval_request_steps')
         .update({
           status: 'APPROVED',
@@ -169,9 +252,14 @@ export const useApprovalTasks = () => {
           comments,
           updated_by: user.id,
         })
-        .eq('id', taskId);
+        .eq('id', taskId)
+        .select('approval_request_id')
+        .single();
 
       if (updateError) throw updateError;
+
+      // 承認フローの完了チェック
+      await checkApprovalCompletion(stepData.approval_request_id);
 
       // タスク一覧を再取得
       await fetchTasks();

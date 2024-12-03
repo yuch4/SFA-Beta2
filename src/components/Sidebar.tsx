@@ -16,6 +16,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import NotificationPopover from './notifications/NotificationPopover';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -36,8 +37,13 @@ const Sidebar = () => {
       
       {profile && (
         <div className="px-2 py-4 mb-6 border-b border-gray-700">
-          <p className="text-white font-medium">{profile.display_name}</p>
-          <p className="text-gray-400 text-sm">{profile.email}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-white font-medium">{profile.display_name}</p>
+              <p className="text-gray-400 text-sm">{profile.email}</p>
+            </div>
+            <NotificationPopover />
+          </div>
         </div>
       )}
 
