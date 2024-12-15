@@ -41,10 +41,10 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.supplier_code) newErrors.supplier_code = 'Code is required';
-    if (!formData.supplier_name) newErrors.supplier_name = 'Name is required';
+    if (!formData.supplier_code) newErrors.supplier_code = '仕入先コードは必須です';
+    if (!formData.supplier_name) newErrors.supplier_name = '仕入先名は必須です';
     if (formData.email && !/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = 'メールアドレスの形式が正しくありません';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -75,14 +75,14 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <FormField
-          label="Supplier Code"
+          label="仕入先コード"
           name="supplier_code"
           value={formData.supplier_code}
           onChange={handleChange}
           error={errors.supplier_code}
         />
         <FormField
-          label="Supplier Name"
+          label="仕入先名"
           name="supplier_name"
           value={formData.supplier_name}
           onChange={handleChange}
@@ -91,7 +91,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       </div>
 
       <FormField
-        label="Supplier Type"
+        label="仕入先区分"
         name="supplier_type"
         as="select"
         value={formData.supplier_type}
@@ -103,7 +103,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       </FormField>
 
       <FormField
-        label="Email"
+        label="メールアドレス"
         type="email"
         name="email"
         value={formData.email}
@@ -112,14 +112,14 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       />
 
       <FormField
-        label="Phone"
+        label="電話番号"
         name="phone"
         value={formData.phone}
         onChange={handleChange}
       />
 
       <FormField
-        label="Address"
+        label="住所"
         name="address"
         as="textarea"
         value={formData.address}
@@ -128,13 +128,13 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
 
       <div className="grid grid-cols-2 gap-4">
         <FormField
-          label="Contact Person"
+          label="担当者名"
           name="contact_person"
           value={formData.contact_person}
           onChange={handleChange}
         />
         <FormField
-          label="Contact Phone"
+          label="担当者電話番号"
           name="contact_phone"
           value={formData.contact_phone}
           onChange={handleChange}
@@ -142,14 +142,14 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       </div>
 
       <FormField
-        label="Department"
+        label="部署"
         name="department"
         value={formData.department}
         onChange={handleChange}
       />
 
       <FormField
-        label="Payment Terms"
+        label="支払条件"
         name="payment_terms"
         as="textarea"
         value={formData.payment_terms}
@@ -157,7 +157,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       />
 
       <FormField
-        label="Purchase Terms"
+        label="購買条件"
         name="purchase_terms"
         as="textarea"
         value={formData.purchase_terms}
@@ -165,7 +165,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
       />
 
       <FormField
-        label="Notes"
+        label="備考"
         name="notes"
         as="textarea"
         value={formData.notes}
@@ -178,13 +178,13 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ supplier, onSubmit, onCance
           onClick={onCancel}
           className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
         >
-          Cancel
+          キャンセル
         </button>
         <button
           type="submit"
           className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
         >
-          {supplier ? 'Update' : 'Create'}
+          {supplier ? '更新' : '登録'}
         </button>
       </div>
     </form>

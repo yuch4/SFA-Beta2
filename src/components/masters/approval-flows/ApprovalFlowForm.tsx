@@ -185,6 +185,40 @@ const ApprovalFlowForm: React.FC = () => {
     });
   };
 
+  const checkDuplicateStepOrder = async (approvalFlowId: string, stepOrder: number) => {
+    const { data, error } = await supabase
+      .from('approval_flow_steps')
+      .select()
+      .eq('approval_flow_id', approvalFlowId)
+      .eq('step_order', stepOrder);
+
+    return data && data.length > 0;
+  };
+
+  const getNextAvailableStepOrder = async (approvalFlowId: string) => {
+    const { data, error } = await supabase
+      .from('approval_flow_steps')
+      .select('step_order')
+      .eq('approval_flow_id', approvalFlowId)
+      .order('step_order', { ascending: false })
+      .limit(1);
+
+    return (data && data[0]?.step_order || 0) + 1;
+  };
+
+  const reorderSteps = async (approvalFlowId: string, steps: any[]) => {
+    const { error } = await supabase
+      .from('approval_flow_steps')
+      .upsert(
+        steps.map((step, index) => ({
+          ...step,
+          step_order: index + 1,
+        }))
+      );
+
+    if (error) throw error;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -208,34 +242,50 @@ const ApprovalFlowForm: React.FC = () => {
 
         if (flowError) throw flowError;
 
-        // Delete existing steps
+        // 既存のステップを削除
         const { error: deleteError } = await supabase
           .from('approval_flow_steps')
-          .update({
-            is_deleted: true,
-            updated_at: now,
-            updated_by: user.id,
-          })
+          .delete()
           .eq('approval_flow_id', id);
 
         if (deleteError) throw deleteError;
 
-        // Insert new steps
-        const { error: stepsError } = await supabase
+        // 削除の確認
+        const { data: existingSteps, error: checkError } = await supabase
           .from('approval_flow_steps')
-          .insert(
-            formData.approval_flow_steps.map(step => ({
-              approval_flow_id: id,
-              step_order: step.step_order,
-              approver_id: step.approver_id,
-              is_active: true,
-              is_deleted: false,
-              created_by: user.id,
-              updated_by: user.id,
-            }))
-          );
+          .select('id')
+          .eq('approval_flow_id', id);
 
-        if (stepsError) throw stepsError;
+        if (checkError) throw checkError;
+
+        if (existingSteps && existingSteps.length > 0) {
+          throw new Error('既存のステップの削除に失敗しました');
+        }
+
+        // 少し待機して確実に削除が完了するのを待つ
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 新しいステップを挿入
+        const newSteps = formData.approval_flow_steps.map((step, index) => ({
+          approval_flow_id: id,
+          step_order: index + 1,
+          approver_id: step.approver_id,
+          is_active: true,
+          is_deleted: false,
+          created_by: user.id,
+          updated_by: user.id,
+        }));
+
+        // 削除後に新しいステップを挿入
+        const { error: insertError } = await supabase
+          .from('approval_flow_steps')
+          .insert(newSteps);
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
+
       } else {
         // Create new approval flow
         const { data: flow, error: flowError } = await supabase
@@ -254,20 +304,20 @@ const ApprovalFlowForm: React.FC = () => {
 
         if (flowError) throw flowError;
 
-        // Insert steps
+        // Insert steps with ordered step_order
+        const newSteps = formData.approval_flow_steps.map((step, index) => ({
+          approval_flow_id: flow.id,
+          step_order: index + 1,
+          approver_id: step.approver_id,
+          is_active: true,
+          is_deleted: false,
+          created_by: user.id,
+          updated_by: user.id,
+        }));
+
         const { error: stepsError } = await supabase
           .from('approval_flow_steps')
-          .insert(
-            formData.approval_flow_steps.map(step => ({
-              approval_flow_id: flow.id,
-              step_order: step.step_order,
-              approver_id: step.approver_id,
-              is_active: true,
-              is_deleted: false,
-              created_by: user.id,
-              updated_by: user.id,
-            }))
-          );
+          .insert(newSteps);
 
         if (stepsError) throw stepsError;
       }
@@ -275,7 +325,7 @@ const ApprovalFlowForm: React.FC = () => {
       navigate('/masters/approval-flows');
     } catch (err) {
       console.error('Error saving approval flow:', err);
-      setError(err instanceof Error ? err : new Error('承認フローの保存に失敗しました'));
+      setError(err instanceof Error ? err : new Error('���認フローの保存に失敗しました'));
     } finally {
       setLoading(false);
     }

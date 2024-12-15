@@ -33,10 +33,10 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.status_code) newErrors.status_code = 'Code is required';
-    if (!formData.status_name) newErrors.status_name = 'Name is required';
+    if (!formData.status_code) newErrors.status_code = 'ステータスコードは必須です';
+    if (!formData.status_name) newErrors.status_name = 'ステータス名は必須です';
     if (formData.display_order === undefined || formData.display_order < 0) {
-      newErrors.display_order = 'Display order must be a positive number';
+      newErrors.display_order = '表示順は0以上の数値を入力してください';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -67,14 +67,14 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <FormField
-          label="Status Code"
+          label="ステータスコード"
           name="status_code"
           value={formData.status_code}
           onChange={handleChange}
           error={errors.status_code}
         />
         <FormField
-          label="Status Name"
+          label="ステータス名"
           name="status_name"
           value={formData.status_name}
           onChange={handleChange}
@@ -84,7 +84,7 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
 
       <div className="grid grid-cols-2 gap-4">
         <FormField
-          label="Display Order"
+          label="表示順"
           type="number"
           name="display_order"
           value={formData.display_order}
@@ -92,7 +92,7 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
           error={errors.display_order}
         />
         <FormField
-          label="Color"
+          label="表示色"
           type="color"
           name="color_settings"
           value={formData.color_settings}
@@ -101,7 +101,7 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
       </div>
 
       <FormField
-        label="Description"
+        label="説明"
         name="description"
         as="textarea"
         value={formData.description}
@@ -114,13 +114,13 @@ const StatusForm: React.FC<StatusFormProps> = ({ status, onSubmit, onCancel }) =
           onClick={onCancel}
           className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
         >
-          Cancel
+          キャンセル
         </button>
         <button
           type="submit"
           className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
         >
-          {status ? 'Update' : 'Create'}
+          {status ? '更新' : '登録'}
         </button>
       </div>
     </form>

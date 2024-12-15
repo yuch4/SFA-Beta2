@@ -79,12 +79,12 @@ const CaseList: React.FC = () => {
     {
       key: 'expected_order_date',
       header: '受注予定日',
-      render: (value: string) => format(new Date(value), 'yyyy-MM-dd')
+      render: (value: string) => format(new Date(value), 'yyyy年MM月')
     },
     {
       key: 'expected_accounting_date',
       header: '計上予定日',
-      render: (value: string) => format(new Date(value), 'yyyy-MM-dd')
+      render: (value: string) => format(new Date(value), 'yyyy年MM月')
     },
     { key: 'assigned_to_name', header: '担当者' },
   ];

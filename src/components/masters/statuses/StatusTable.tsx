@@ -10,12 +10,12 @@ interface StatusTableProps {
 
 const StatusTable: React.FC<StatusTableProps> = ({ statuses, onEdit, onDelete }) => {
   const columns = [
-    { key: 'status_code', header: 'Code' },
-    { key: 'status_name', header: 'Name' },
-    { key: 'display_order', header: 'Display Order' },
+    { key: 'status_code', header: 'ステータスコード' },
+    { key: 'status_name', header: 'ステータス名' },
+    { key: 'display_order', header: '表示順' },
     {
       key: 'color_settings',
-      header: 'Color',
+      header: '表示色',
       render: (value: string) => (
         <div className="flex items-center">
           <div
@@ -28,14 +28,14 @@ const StatusTable: React.FC<StatusTableProps> = ({ statuses, onEdit, onDelete })
     },
     {
       key: 'is_active',
-      header: 'Status',
+      header: '状態',
       render: (value: boolean) => (
         <span
           className={`px-2 py-1 text-xs font-semibold rounded-full ${
             value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
           }`}
         >
-          {value ? 'Active' : 'Inactive'}
+          {value ? '有効' : '無効'}
         </span>
       ),
     },

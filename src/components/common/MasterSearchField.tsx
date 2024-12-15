@@ -41,7 +41,7 @@ export function MasterSearchField<T extends { id: string }>({
           className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${
             error ? 'border-red-300' : 'border-gray-300'
           } ${selectedItem ? 'bg-gray-50' : 'bg-white'}`}
-          placeholder={`Search ${label.toLowerCase()}...`}
+          placeholder={`${label}を検索...`}
           value={selectedItem ? renderSelected(selectedItem) : ''}
           onClick={() => setIsDialogOpen(true)}
           readOnly
@@ -56,7 +56,7 @@ export function MasterSearchField<T extends { id: string }>({
       <SearchDialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        title={`Select ${label}`}
+        title={`${label}を選択`}
         data={data}
         onSelect={onSelect}
         renderItem={renderItem}
